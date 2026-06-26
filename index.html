@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Сверка ДДС</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,sans-serif;background:#F5F5F5;color:#222;font-size:14px}
+.hdr{background:#1A237E;color:#fff;padding:14px 24px;display:flex;justify-content:space-between;align-items:center}
+.hdr h1{font-size:17px;font-weight:600}
+.hdr p{font-size:11px;opacity:.65;margin-top:2px}
+.hdr-right{display:flex;align-items:center;gap:12px}
+.user-badge{font-size:12px;background:rgba(255,255,255,.15);padding:5px 12px;border-radius:20px}
+.main{padding:18px 24px;max-width:1400px;margin:0 auto}
+.card{background:#fff;border-radius:10px;padding:18px 20px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+.card h2{font-size:11px;font-weight:700;color:#1A237E;margin-bottom:14px;text-transform:uppercase;letter-spacing:.6px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.field{display:flex;flex-direction:column;gap:4px}
+label{font-size:11px;color:#888;font-weight:600;text-transform:uppercase}
+input[type=date]{padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:145px}
+select{padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:220px;background:#fff}
+button{padding:9px 22px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600}
+.btn-primary{background:#1A237E;color:#fff}
+.btn-primary:hover{background:#283593}
+.btn-primary:disabled{background:#bbb;cursor:not-allowed}
+.btn-google{background:#fff;color:#444;border:1px solid #ddd;display:flex;align-items:center;gap:8px;padding:9px 18px}
+.btn-google:hover{background:#f5f5f5}
+.btn-sm{background:#ECEFF1;color:#37474F;font-size:12px;padding:6px 14px;font-weight:500}
+.btn-sm:hover{background:#CFD8DC}
+.progress{height:3px;background:#eee;border-radius:2px;margin-top:10px}
+.bar{height:100%;background:#1A237E;width:0%;border-radius:2px;transition:width .4s}
+.log{font-size:12px;color:#78909C;margin-top:7px;min-height:16px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px}
+.stat{border-radius:8px;padding:12px 14px}
+.stat-v{font-size:23px;font-weight:700}
+.stat-l{font-size:11px;margin-top:2px;font-weight:500;opacity:.85}
+.s-blue{background:#E3F2FD;color:#0D47A1}
+.s-green{background:#E8F5E9;color:#1B5E20}
+.s-red{background:#FFEBEE;color:#B71C1C}
+.ctx-bar{background:#E8EAF6;border-radius:8px;padding:10px 14px;margin-bottom:14px;
+         font-size:12px;color:#3949AB;display:flex;gap:16px;flex-wrap:wrap}
+.ctx-bar span{font-weight:600}
+.tabs{display:flex;border-bottom:2px solid #ECEFF1;margin-bottom:14px;flex-wrap:wrap}
+.tab{padding:8px 16px;cursor:pointer;font-size:12px;font-weight:600;color:#90A4AE;
+     border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap}
+.tab:hover{color:#546E7A}
+.tab.active{color:#1A237E;border-bottom-color:#1A237E}
+.tab-pane{display:none}
+.tab-pane.active{display:block}
+.tbl-wrap{max-height:430px;overflow-y:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;padding:6px 8px;border-bottom:2px solid #ECEFF1;color:#78909C;
+   font-weight:700;font-size:10px;text-transform:uppercase;position:sticky;top:0;background:#fff}
+td{padding:6px 8px;border-bottom:1px solid #F5F5F5;vertical-align:middle}
+tr:hover td{background:#FAFAFA}
+.badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700}
+.b-ok{background:#E8F5E9;color:#2E7D32}
+.b-no{background:#FFEBEE;color:#C62828}
+.meta{font-size:11px;color:#90A4AE;margin-bottom:8px}
+a{color:#1565C0;text-decoration:none}
+a:hover{text-decoration:underline}
+.empty{text-align:center;padding:40px;color:#BDBDBD;font-size:13px}
+.toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px}
+.mono{font-family:monospace;font-size:10px}
+#loginBlock{text-align:center;padding:60px 20px}
+#loginBlock h2{font-size:20px;margin-bottom:8px;color:#1A237E}
+#loginBlock p{color:#78909C;font-size:13px;margin-bottom:24px}
+#appBlock{display:none}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div>
+    <h1>Сверка ДДС — Доходы и Расходы</h1>
+    <p>Проверка разноски USDT-операций · данные из Google Sheets</p>
+  </div>
+  <div class="hdr-right">
+    <div class="user-badge" id="userBadge" style="display:none"></div>
+    <button class="btn-sm" id="btnLogout" style="display:none" onclick="logout()">Выйти</button>
+  </div>
+</div>
+
+<!-- Блок входа -->
+<div id="loginBlock">
+  <h2>Войдите через Google</h2>
+  <p>Нужен доступ к Google Sheets для чтения данных ДДС</p>
+  <div id="g_id_onload"
+       data-client_id="74904417294-k76rdf2r1fvl9qifcjqd64v7602g97db.apps.googleusercontent.com"
+       data-callback="onGoogleLogin"
+       data-auto_select="true"
+       data-ux_mode="popup">
+  </div>
+  <div class="g_id_signin"
+       data-client_id="74904417294-k76rdf2r1fvl9qifcjqd64v7602g97db.apps.googleusercontent.com"
+       data-type="standard"
+       data-size="large"
+       data-theme="outline"
+       data-text="sign_in_with"
+       data-shape="rectangular"
+       data-logo_alignment="left">
+  </div>
+</div>
+
+<!-- Основной блок -->
+<div id="appBlock">
+<div class="main">
+
+  <div class="card">
+    <h2>Параметры сверки</h2>
+    <div class="row">
+      <div class="field">
+        <label>С</label>
+        <input type="date" id="dFrom" value="2026-05-01">
+      </div>
+      <div class="field">
+        <label>По</label>
+        <input type="date" id="dTo" value="2026-06-30">
+      </div>
+      <div class="field">
+        <label>Кошелёк</label>
+        <select id="walletSel">
+          <option value="">⏳ Загрузка...</option>
+        </select>
+      </div>
+      <div class="field">
+        <button class="btn-primary" id="btnRun" onclick="run()" disabled>▶ Запустить</button>
+      </div>
+    </div>
+    <div class="progress"><div class="bar" id="bar"></div></div>
+    <div class="log" id="log">Загружаю список кошельков...</div>
+  </div>
+
+  <div id="results" style="display:none">
+    <div class="ctx-bar" id="ctxBar"></div>
+    <div class="card">
+      <h2>Сводка</h2>
+      <div class="stats" id="stats"></div>
+    </div>
+    <div class="card">
+      <div class="toolbar">
+        <div class="tabs" id="tabs">
+          <div class="tab active" data-tab="inc-no">❌ Доходы не разнесены</div>
+          <div class="tab" data-tab="exp-no">❌ Расходы не разнесены</div>
+          <div class="tab" data-tab="inc-all">Все доходы</div>
+          <div class="tab" data-tab="exp-all">Все расходы</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn-sm" onclick="dlXls('missing')">⬇ Не разнесённые (Excel)</button>
+          <button class="btn-sm" onclick="dlXls('all')">⬇ Все (Excel)</button>
+        </div>
+      </div>
+      <div id="inc-no" class="tab-pane active"></div>
+      <div id="exp-no" class="tab-pane"></div>
+      <div id="inc-all" class="tab-pane"></div>
+      <div id="exp-all" class="tab-pane"></div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script>
+const SS_ID = '14piC6xMPycoLt84n731p1srx9u5kGrp-fDCO_kQx1No';
+const CLIENT_ID = '74904417294-k76rdf2r1fvl9qifcjqd64v7602g97db.apps.googleusercontent.com';
+const SCOPES = 'https://www.googleapis.com/auth/spreadsheets.readonly';
+
+let accessToken = null;
+let popAll=[], popNo=[], spiAll=[], spiNo=[], lastCtx={};
+
+const OWN_WALLETS = new Set(['Yellow','Yellow ','Green','Green ','Red','Red ','BG',
+  'Gas EZA 2','Gas EZA','Gas LM','Gas NTR','Crypto office','Crypto office ЗП',
+  'TW Микс 2','TW Микс 3','TW LM 2','TW Leadrock 2','TW Offer.store 2',
+  'TW Aray 2','TW BB MN','TW Mostbet','TW IG SAIDI ','TW Dating 2','TW Баеры 2',
+  'TW Рocketprofit + Everad 2','TW Rocketprofit + Everad 2']);
+
+const NAME_MAP = {
+  'limonad/limonad2':'limonad','skylead/skylead2':'skylead',
+  'cashfactories/cashfactories 2':'cashfactories',
+  'bb mn (1xbet turkey\n1xbet pakistan/melbet)':'melbet',
+  'luckyonline ':'lucky.online','luckyonline':'lucky.online',
+  'mostbet ':'mostbet','profitpay ':'profitpay','manymoney ':'manymoney',
+  'traffic light':'trafficlight','offerstore':'offer.store','offerstore 2':'offer.store',
+};
+const norm = x => { x=String(x||'').trim().toLowerCase(); return NAME_MAP[x]||x; };
+
+// ── Авторизация ──────────────────────────────────────────────
+function onGoogleLogin(response) {
+  // response.credential = JWT id_token, но нам нужен access_token для API
+  // Используем токен для получения access_token через implicit flow
+  requestAccessToken();
+}
+
+function requestAccessToken() {
+  const client = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPES,
+    callback: (resp) => {
+      if (resp.error) { log('Ошибка авторизации: ' + resp.error); return; }
+      accessToken = resp.access_token;
+      // Получаем имя пользователя
+      fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: 'Bearer ' + accessToken }
+      }).then(r=>r.json()).then(u => {
+        document.getElementById('userBadge').textContent = u.name || u.email;
+        document.getElementById('userBadge').style.display = 'block';
+        document.getElementById('btnLogout').style.display = 'block';
+      });
+      document.getElementById('loginBlock').style.display = 'none';
+      document.getElementById('appBlock').style.display = 'block';
+      loadWallets();
+    }
+  });
+  client.requestAccessToken();
+}
+
+// Запускаем авторизацию при нажатии на Google Sign-In
+window.onGoogleLogin = function(response) {
+  requestAccessToken();
+};
+
+function logout() {
+  google.accounts.oauth2.revoke(accessToken, () => {
+    accessToken = null;
+    document.getElementById('loginBlock').style.display = 'block';
+    document.getElementById('appBlock').style.display = 'none';
+    document.getElementById('userBadge').style.display = 'none';
+    document.getElementById('btnLogout').style.display = 'none';
+  });
+}
+
+// ── Sheets API ───────────────────────────────────────────────
+async function sheetsGet(range) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SS_ID}/values/${encodeURIComponent(range)}?valueRenderOption=FORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING`;
+  const r = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
+  if (!r.ok) throw new Error(`Sheets API error ${r.status}: ${await r.text()}`);
+  const data = await r.json();
+  return data.values || [];
+}
+
+// ── Загрузка кошельков из Чек-листа ─────────────────────────
+async function loadWallets() {
+  log('Загружаю список кошельков...');
+  bar(20);
+  try {
+    const rows = await sheetsGet('Чек-лист Счета!A:E');
+    const wallets = [];
+    for (let i = 1; i < rows.length; i++) {
+      const name   = String(rows[i][0] || '').trim();
+      const status = String(rows[i][4] || '').trim();
+      if (name && status === '✅') wallets.push(name);
+    }
+    wallets.sort();
+    const sel = document.getElementById('walletSel');
+    sel.innerHTML = '<option value="">— Все кошельки —</option>' +
+      wallets.map(w => `<option value="${esc(w)}">${w}</option>`).join('');
+    document.getElementById('btnRun').disabled = false;
+    bar(0);
+    log('Готово. Задайте период и нажмите «Запустить»');
+  } catch(e) {
+    log('Ошибка загрузки кошельков: ' + e.message);
+    bar(0);
+    document.getElementById('walletSel').innerHTML = '<option value="">— Все кошельки —</option>';
+    document.getElementById('btnRun').disabled = false;
+  }
+}
+
+// ── Основная сверка ──────────────────────────────────────────
+async function run() {
+  const dFrom  = document.getElementById('dFrom').value;
+  const dTo    = document.getElementById('dTo').value;
+  const wallet = document.getElementById('walletSel').value;
+  if (!dFrom || !dTo) { log('Укажите период'); return; }
+
+  document.getElementById('btnRun').disabled = true;
+  document.getElementById('results').style.display = 'none';
+  bar(10); log('Загружаю лист USDT...');
+
+  try {
+    // Читаем все три листа параллельно
+    const [uRaw, dRaw, rRaw] = await Promise.all([
+      sheetsGet('USDT!A:W'),
+      sheetsGet('Доходы!A:Z'),
+      sheetsGet('Расходы!A:Z'),
+    ]);
+
+    bar(40); log('Обрабатываю данные...');
+
+    // USDT
+    const UCOLS = ['Кошелек_назв','Адрес','Счет_FROM','Счет_TO','Тип','ID_расхода','Сумма','_',
+                   'Txn_Hash','Block','Time_UTC','From','To','Token','Token_Symbol','Amount',
+                   'Result','Status','День','Месяц','Год','знак','ДАТА'];
+    const uRows = [];
+    for (let i = 2; i < uRaw.length; i++) {
+      const r = uRaw[i];
+      const obj = {};
+      UCOLS.forEach((c,ci) => { obj[c] = r[ci] || ''; });
+      const ds = parseDay(obj.ДАТА);
+      if (!ds || ds < dFrom || ds > dTo) continue;
+      if (wallet && obj.Кошелек_назв.trim() !== wallet) continue;
+      const amt = parseFloat(String(obj.Amount||'0').replace('-','').split('.')[0]) || 0;
+      uRows.push({
+        dt: ds, koshelek: obj.Кошелек_назв.trim(),
+        schet_from: obj.Счет_FROM.trim(), schet_to: obj.Счет_TO.trim(),
+        tip: obj.Тип.trim(), id: obj.ID_расхода.trim(),
+        hash: obj.Txn_Hash.trim().toLowerCase(), amt,
+      });
+    }
+
+    // Доходы — находим заголовки
+    const dHdr = dRaw[0] || [];
+    const dI = n => dHdr.findIndex(h => String(h).trim() === n);
+    const dRows = [];
+    for (let i = 1; i < dRaw.length; i++) {
+      const r = dRaw[i];
+      const dt = parseDay(r[dI('Дата поступления')]);
+      if (!dt) continue;
+      dRows.push({
+        id:   String(r[dI('ID')]  || '').trim(),
+        cnt:  norm(r[1] || ''),
+        dt,
+        amt:  Math.round(parseFloat(r[dI('Сумма')]) || 0),
+        hash: String(r[dI('ХЕШ')] || '').trim().toLowerCase(),
+      });
+    }
+
+    // Расходы — заголовки в 3-й строке (индекс 2)
+    const rHdr = rRaw[2] || [];
+    const rI = n => rHdr.findIndex(h => String(h).trim() === n);
+    const rRows = [];
+    for (let i = 3; i < rRaw.length; i++) {
+      const r = rRaw[i];
+      const dt = parseDay(r[rI('Дата платежа')]);
+      if (!dt) continue;
+      rRows.push({
+        id:   String(r[rI('ID')]   || '').trim(),
+        cnt:  String(r[rI('Контрагент')] || '').trim().toLowerCase(),
+        dt,
+        amt:  Math.round(parseFloat(r[rI('Сумма')]) || 0),
+        hash: String(r[rI('ХЕШ')]  || '').trim().toLowerCase(),
+      });
+    }
+
+    bar(65); log('Сверяю...');
+
+    // Индексы
+    const ids_d  = new Set(dRows.map(r=>r.id).filter(Boolean));
+    const hash_d = new Set(dRows.map(r=>r.hash).filter(Boolean));
+    const idx_d  = {};
+    dRows.forEach(r => { const k=`${r.cnt}|${r.dt}|${r.amt}`; if(!idx_d[k]) idx_d[k]=r.id; });
+
+    const ids_r  = new Set(rRows.map(r=>r.id).filter(Boolean));
+    const hash_r = new Set(rRows.map(r=>r.hash).filter(Boolean));
+    const idx_r  = {};
+    rRows.forEach(r => { const k=`${r.cnt}|${r.dt}|${r.amt}`; if(!idx_r[k]) idx_r[k]=r.id; });
+
+    // ДОХОДЫ: пополнения транзитных кошельков партнёров
+    popAll = uRows.filter(r => r.tip==='Пополнение' && !OWN_WALLETS.has(r.koshelek) && r.amt>2);
+    popAll.forEach(r => {
+      r.ok=false; r.mid='';
+      if (r.id.startsWith('D') && ids_d.has(r.id)) { r.ok=true; r.mid=r.id; return; }
+      if (r.hash && hash_d.has(r.hash)) { r.ok=true; r.mid='(по хэшу)'; return; }
+      const k=`${norm(r.koshelek)}|${r.dt}|${Math.round(r.amt)}`;
+      if (idx_d[k]) { r.ok=true; r.mid=idx_d[k]; }
+    });
+    popNo = popAll.filter(r => !r.ok);
+
+    // РАСХОДЫ: списания с хэшем, дедупликация
+    const seenH = new Set();
+    spiAll = uRows.filter(r => {
+      if (r.tip!=='Списание' || r.amt<=2 || !r.hash) return false;
+      if (seenH.has(r.hash)) return false;
+      seenH.add(r.hash); return true;
+    });
+    spiAll.forEach(r => {
+      r.ok=false; r.mid='';
+      if (r.id.startsWith('R') && ids_r.has(r.id)) { r.ok=true; r.mid=r.id; return; }
+      if (r.hash && hash_r.has(r.hash)) { r.ok=true; r.mid='(по хэшу)'; return; }
+      const cnt=String(r.schet_to||r.koshelek||'').trim().toLowerCase();
+      const k=`${cnt}|${r.dt}|${Math.round(r.amt)}`;
+      if (idx_r[k]) { r.ok=true; r.mid=idx_r[k]; }
+    });
+    spiNo = spiAll.filter(r => !r.ok);
+
+    lastCtx = { dFrom, dTo, wallet: wallet || 'Все кошельки' };
+    bar(100); log(`✓ Готово: доходов не разнесено ${popNo.length}, расходов не разнесено ${spiNo.length}`);
+    render();
+
+  } catch(e) {
+    log('Ошибка: ' + e.message); bar(0); console.error(e);
+  }
+  document.getElementById('btnRun').disabled = false;
+}
+
+// ── Вспомогательные ─────────────────────────────────────────
+function parseDay(v) {
+  if (!v) return null;
+  const s = String(v).trim();
+  // Форматы: DD.MM.YYYY, YYYY-MM-DD, DD.MM.YYYY HH:MM:SS
+  let m;
+  if ((m = s.match(/^(\d{2})\.(\d{2})\.(\d{4})/))) return `${m[3]}-${m[2]}-${m[1]}`;
+  if ((m = s.match(/^(\d{4}-\d{2}-\d{2})/))) return m[1];
+  return null;
+}
+function fmt(s){ if(!s) return ''; const[y,mo,d]=s.split('-'); return `${d}.${mo}.${y}`; }
+function fmtN(n){ return Number(n).toLocaleString('ru-RU',{maximumFractionDigits:2}); }
+function esc(s){ return s.replace(/"/g,'&quot;'); }
+function log(m){ document.getElementById('log').textContent = m; }
+function bar(p){ document.getElementById('bar').style.width = p+'%'; }
+
+// ── Табы ────────────────────────────────────────────────────
+document.getElementById('tabs').addEventListener('click', e => {
+  const t = e.target.closest('.tab'); if(!t) return;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById(t.dataset.tab).classList.add('active');
+});
+
+// ── Рендер ──────────────────────────────────────────────────
+function render(){
+  document.getElementById('results').style.display = 'block';
+  const sumPN=popNo.reduce((s,r)=>s+r.amt,0);
+  const sumSN=spiNo.reduce((s,r)=>s+r.amt,0);
+
+  document.getElementById('ctxBar').innerHTML =
+    `Период: <span>${fmt(lastCtx.dFrom)} — ${fmt(lastCtx.dTo)}</span> &nbsp;|&nbsp; Кошелёк: <span>${lastCtx.wallet}</span>`;
+
+  document.getElementById('stats').innerHTML = `
+    <div class="stat s-blue"><div class="stat-v">${popAll.length}</div><div class="stat-l">Пополнений всего</div></div>
+    <div class="stat s-green"><div class="stat-v">${popAll.length-popNo.length}</div><div class="stat-l">Доходов разнесено ✅</div></div>
+    <div class="stat ${popNo.length?'s-red':'s-green'}"><div class="stat-v">${popNo.length}</div><div class="stat-l">Доходов НЕ разнесено</div></div>
+    <div class="stat ${popNo.length?'s-red':'s-green'}"><div class="stat-v">${fmtN(sumPN)}</div><div class="stat-l">Сумма не разнесённых доходов</div></div>
+    <div class="stat s-blue"><div class="stat-v">${spiAll.length}</div><div class="stat-l">Списаний всего</div></div>
+    <div class="stat s-green"><div class="stat-v">${spiAll.length-spiNo.length}</div><div class="stat-l">Расходов разнесено ✅</div></div>
+    <div class="stat ${spiNo.length?'s-red':'s-green'}"><div class="stat-v">${spiNo.length}</div><div class="stat-l">Расходов НЕ разнесено</div></div>
+    <div class="stat ${spiNo.length?'s-red':'s-green'}"><div class="stat-v">${fmtN(sumSN)}</div><div class="stat-l">Сумма не разнесённых расходов</div></div>
+  `;
+
+  document.querySelectorAll('.tab').forEach(t => {
+    if(t.dataset.tab==='inc-no') t.textContent=`❌ Доходы не разнесены (${popNo.length})`;
+    if(t.dataset.tab==='exp-no') t.textContent=`❌ Расходы не разнесены (${spiNo.length})`;
+    if(t.dataset.tab==='inc-all') t.textContent=`Все доходы (${popAll.length})`;
+    if(t.dataset.tab==='exp-all') t.textContent=`Все расходы (${spiAll.length})`;
+  });
+
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(x=>x.classList.remove('active'));
+  document.querySelector('[data-tab="inc-no"]').classList.add('active');
+  document.getElementById('inc-no').classList.add('active');
+
+  renderTable('inc-no',  popNo,  'income');
+  renderTable('exp-no',  spiNo,  'expense');
+  renderTable('inc-all', popAll, 'income');
+  renderTable('exp-all', spiAll, 'expense');
+}
+
+function renderTable(id, rows, type){
+  const el = document.getElementById(id);
+  if(!rows.length){
+    el.innerHTML=`<div class="empty">✅ Все ${type==='income'?'доходы':'расходы'} разнесены</div>`;
+    return;
+  }
+  const sum=rows.reduce((s,r)=>s+r.amt,0);
+  const isInc = type==='income';
+  el.innerHTML=`
+    <div class="meta">Записей: ${rows.length} | Сумма: ${fmtN(sum)} USDT</div>
+    <div class="tbl-wrap"><table>
+      <thead><tr>
+        <th>Дата</th>
+        <th>${isInc?'Партнёр':'Кошелёк'}</th>
+        <th>${isInc?'Наш кошелёк':'Куда'}</th>
+        <th style="text-align:right">Сумма USDT</th>
+        <th>Статус</th><th>ID</th><th>Hash</th>
+      </tr></thead>
+      <tbody>${rows.map(r=>{
+        const h=String(r.hash||'');
+        const url=h.length>10?`https://tronscan.org/#/transaction/${h}`:'';
+        return `<tr>
+          <td>${fmt(r.dt)}</td>
+          <td>${isInc?(r.koshelek||''):(r.schet_from||r.koshelek||'')}</td>
+          <td>${r.schet_to||''}</td>
+          <td style="text-align:right;font-weight:600">${fmtN(r.amt)}</td>
+          <td><span class="badge ${r.ok?'b-ok':'b-no'}">${r.ok?'✓ Да':'✗ НЕТ'}</span></td>
+          <td style="font-size:11px;color:#1565C0">${r.mid||''}</td>
+          <td class="mono">${url?`<a href="${url}" target="_blank">${h.slice(0,14)}…</a>`:''}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>`;
+}
+
+// ── Excel ────────────────────────────────────────────────────
+function dlXls(mode){
+  const wb=XLSX.utils.book_new();
+  const ctx=`${lastCtx.wallet} | ${fmt(lastCtx.dFrom)}—${fmt(lastCtx.dTo)}`;
+  const pR=mode==='missing'?popNo:popAll;
+  const sR=mode==='missing'?spiNo:spiAll;
+
+  const ph=['Дата','Партнёр','Наш кошелёк','Сумма USDT','Статус','ID в Доходах','Hash'];
+  const pd=[[`Доходы: ${ctx}`],[],ph,
+    ...pR.map(r=>[fmt(r.dt),r.koshelek,r.schet_to,r.amt,r.ok?'Разнесено':'НЕТ',r.mid,r.hash])];
+  if(pR.length) pd.push([],['ИТОГО','','',pR.reduce((s,r)=>s+r.amt,0)]);
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(pd),'Доходы');
+
+  const rh=['Дата','Кошелёк','Куда','Сумма USDT','Статус','ID в Расходах','Hash'];
+  const rd=[[`Расходы: ${ctx}`],[],rh,
+    ...sR.map(r=>[fmt(r.dt),r.schet_from||r.koshelek,r.schet_to,r.amt,r.ok?'Разнесено':'НЕТ',r.mid,r.hash])];
+  if(sR.length) rd.push([],['ИТОГО','','',sR.reduce((s,r)=>s+r.amt,0)]);
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rd),'Расходы');
+
+  const w=lastCtx.wallet.replace(/[^a-zA-Zа-яА-Я0-9]/g,'_').slice(0,20);
+  XLSX.writeFile(wb,`Сверка_${w}_${lastCtx.dFrom}_${lastCtx.dTo}_${mode==='missing'?'проблемы':'все'}.xlsx`);
+}
+</script>
+</body>
+</html>
